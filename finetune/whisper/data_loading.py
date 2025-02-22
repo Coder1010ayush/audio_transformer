@@ -16,7 +16,7 @@ class AudioDataset(Dataset):
 
     def _preprocess_data(self):
         self.df = self.df[self.df["label"].str.len() <= self.max_label_length]
-        # self.df = self.df.dropna(subset=["audio_path", "label"])
+        self.df = self.df.dropna(subset=["audio_path", "label"])
         self.df = self.df.sample(frac=1).reset_index(drop=True)
 
     def __len__(self):
@@ -25,7 +25,7 @@ class AudioDataset(Dataset):
     def _load_audio(self, audio_path):
         # Load and resample audio to 16kHz
         audio, sr = librosa.load(
-            os.path.join("/home/infinity/Documents/fluency_ai/data/audio", audio_path),
+            os.path.join(audio_path),
             sr=16000,
         )
         return audio

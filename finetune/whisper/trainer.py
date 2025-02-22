@@ -3,10 +3,10 @@ import torch
 import evaluate
 import logging
 from tqdm import tqdm
-from config import TrainingConfig
+from configuration.whisper_config import TrainingConfig
 from data_loading import create_data_loaders
-from utils import initialize_components, save_checkpoint, save_final_model
-from utils import unknown_tokens
+from configuration import initialize_components, save_checkpoint, save_final_model
+from configuration import unknown_tokens
 
 # Configure logging
 logging.basicConfig(
