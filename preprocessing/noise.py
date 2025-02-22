@@ -6,6 +6,8 @@ import torch
 import librosa
 import torchaudio
 from typing import Union, List, Dict
+import scipy.signal
+import scipy.signal as signal
 
 # Time Domain technique for audio augmentation
 # Noise Injection – Adding Gaussian, pink, real-world background noise.
@@ -17,14 +19,14 @@ from typing import Union, List, Dict
 # Waveform Cropping – Randomly remove or shuffle segments of audio
 
 
-def gaussian_noise(audio_waveform: Union[np.ndarray, torch.Tensor], noise_level=0.005):
-    if isinstance(audio_waveform, np.ndarray):
-        noise = np.random.normal(loc=0, scale=noise_level, size=audio_waveform.shape)
-        return audio_waveform + noise
-    elif isinstance(audio_waveform, torch.Tensor):
-        audio_waveform = audio_waveform.detach().numpy()
-        noise = np.random.normal(loc=0, scale=noise_level, size=audio_waveform.shape)
-        return audio_waveform + noise
+def gaussian_noise(audio: Union[np.ndarray, torch.Tensor], noise_level=0.005):
+    if isinstance(audio, np.ndarray):
+        noise = np.random.normal(loc=0, scale=noise_level, size=audio.shape)
+        return audio + noise
+    elif isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+        noise = np.random.normal(loc=0, scale=noise_level, size=audio.shape)
+        return audio + noise
 
 
 def time_stretch(
@@ -89,6 +91,184 @@ def pitch_shift(audio, sr, n_steps=4, n_fft=2048, hop_length=512, use_custom=Tru
         return shifted_audio
     else:
         audio = librosa.effects.pitch_shift(audio, sr=sr, n_steps=n_steps)
+
+
+def volume_pertubation(audio: Union[np.ndarray, torch.Tensor], range_gain=(0.3, 0.7)):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    gain_factor = np.random.uniform(*range_gain)
+    return audio * gain_factor
+
+
+def reverberation_noise(audio: Union[np.ndarray, torch.Tensor], rir):
+    audio = scipy.signal.fftconvolve(audio, rir, mode="full")[: len(audio)]
+    return audio
+
+
+def linear_clip_waveform(
+    audio: Union[np.ndarray, torch.Tensor], methods="soft", threshold=0.3, alpha=2
+):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    if methods == "soft":
+        audio = audio / (1 + np.abs(audio / threshold) ** alpha)
+        return audio
+    elif methods == "hard":
+        audio = np.clip(audio, -threshold, threshold)
+        return audio
+    else:
+        raise ValueError(f"Unsupported methode {methods} is given")
+
+
+"""  
+Transfer Functions for Analog Distortion ( Studied in Digital Signal Processing )
+We can apply different non-linear functions to shape the signal: 
+    Hyperbolic Tangent (tanh) – Simulates soft saturation like in vacuum tube amplifiers(stackoverflow) :  x(t)=tanh(g⋅x(t))
+    Arctangent (atan) – Smooth compression with softer high-end distortion: x(t) = 2/pi * arctan(g(x(t)))
+    Exponential Soft Clipping – Models the gradual transition from linear to saturated : x(t) = x(t)/ (1 + alpha * abs(x(t))) 
+    Dynamic Softness – Instead of a fixed clipping threshold
+"""
+
+
+def hyperbolic_distortion(audio: Union[np.ndarray, torch.Tensor], gain_factor=0.3):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    audio = np.tanh(gain_factor * audio)
+    return audio
+
+
+def arctangent_distortion(audio: Union[np.ndarray, torch.Tensor], gain_factor=0.3):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    audio = 2 / np.pi * np.arctanh(gain_factor * audio)
+    return audio
+
+
+def exponential_distortion(audio: Union[np.ndarray, torch.Tensor], alpha=12):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    audio = audio / (1 + alpha * np.abs(audio))
+    return audio
+
+
+def dynamic_softness_distortion(
+    audio: Union[np.ndarray, torch.Tensor], beta=0.6, gamma=10
+):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    alpha = beta * (1 - np.exp(-gamma * np.abs(audio)))
+    return audio / (1 + alpha * np.abs(audio))
+
+
+def low_pass_filter(audio, sr, cutoff=5000, order=4):
+    nyquist = sr / 2  # Nyquist frequency
+    normal_cutoff = cutoff / nyquist
+    b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
+    return signal.filtfilt(b, a, audio)
+
+
+def high_pass_filter(audio, sr, cutoff=100, order=4):
+    nyquist = sr / 2
+    normal_cutoff = cutoff / nyquist
+    b, a = signal.butter(order, normal_cutoff, btype="high", analog=False)
+    return signal.filtfilt(b, a, audio)
+
+
+def dynamic_low_pass_filter(audio, sr, min_cutoff=2000, max_cutoff=8000, order=4):
+    nyquist = sr / 2
+    envelope = np.abs(signal.hilbert(audio))
+    dynamic_cutoff = min_cutoff + (max_cutoff - min_cutoff) * (
+        envelope / np.max(envelope)
+    )
+    filtered_audio = np.zeros_like(audio)
+    for i in range(len(audio)):
+        normal_cutoff = dynamic_cutoff[i] / nyquist
+        b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
+        filtered_audio[i] = signal.filtfilt(
+            b, a, [audio[i - 1] if i > 0 else 0, audio[i]]
+        )[-1]
+    return filtered_audio
+
+
+def dynamic_high_pass_filter(audio, sr, min_cutoff=50, max_cutoff=500, order=4):
+    nyquist = sr / 2
+    envelope = np.abs(signal.hilbert(audio))
+    dynamic_cutoff = min_cutoff + (max_cutoff - min_cutoff) * (
+        envelope / np.max(envelope)
+    )
+    filtered_audio = np.zeros_like(audio)
+    for i in range(len(audio)):
+        normal_cutoff = dynamic_cutoff[i] / nyquist
+        b, a = signal.butter(order, normal_cutoff, btype="high", analog=False)
+        filtered_audio[i] = signal.filtfilt(
+            b, a, [audio[i - 1] if i > 0 else 0, audio[i]]
+        )[-1]
+    return filtered_audio
+
+
+def apply_filter(
+    audio: Union[np.ndarray, torch.Tensor],
+    sr,
+    methode="hard",
+    thres=None,
+    gain_factor=None,
+    alpha=None,
+    beta=None,
+    gamma=None,
+    cutoff=None,
+    min_cutoff=None,
+    max_cutoff=None,
+    use_dynamic=False,
+):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    if methode == "hard":
+        if alpha and thres:
+            audio = linear_clip_waveform(
+                audio=audio, methods=methode, alpha=alpha, threshold=thres
+            )
+        audio = linear_clip_waveform(audio=audio, methods=methode)
+    elif methode == "soft":
+        if alpha and thres:
+            audio = linear_clip_waveform(
+                audio=audio, methods=methode, alpha=alpha, threshold=thres
+            )
+        audio = linear_clip_waveform(audio=audio, methods=methode)
+
+    elif methode == "hyperbolic_distortion":
+        if gain_factor:
+            audio = hyperbolic_distortion(audio=audio, gain_factor=gain_factor)
+        audio = hyperbolic_distortion(audio=audio)
+    elif methode == "arctangent_distortion":
+        if gain_factor:
+            audio = arctangent_distortion(audio=audio, gain_factor=gain_factor)
+        audio = arctangent_distortion(audio=audio)
+    elif methode == "exponential_distortion":
+        if alpha:
+            audio = exponential_distortion(audio=audio, alpha=alpha)
+        audio = exponential_distortion(audio=audio)
+    elif methode == "dynamic_softness_distortion":
+        if beta and gamma:
+            audio = dynamic_softness_distortion(audio=audio, beta=beta, gamma=gamma)
+        audio = dynamic_softness_distortion(audio=audio)
+    if use_dynamic == False:
+        if cutoff:
+            audio = low_pass_filter(audio=audio, sr=sr, cutoff=cutoff)
+            audio = high_pass_filter(audio=audio, sr=sr, cutoff=cutoff)
+        audio = low_pass_filter(audio=audio, sr=sr, cutoff=cutoff)
+        audio = high_pass_filter(audio=audio, sr=sr, cutoff=cutoff)
+        return audio
+    else:
+        if min_cutoff and max_cutoff:
+            audio = dynamic_low_pass_filter(
+                audio=audio, sr=sr, min_cutoff=min_cutoff, max_cutoff=max_cutoff
+            )
+            audio = high_pass_filter(
+                audio=audio, sr=sr, min_cutoff=min_cutoff, max_cutoff=max_cutoff
+            )
+        audio = dynamic_low_pass_filter(audio=audio, sr=sr)
+        audio = high_pass_filter(audio=audio, sr=sr)
+        return audio
 
 
 # Time-Frequency Domain Augmentations (Spectrogram-Based)
