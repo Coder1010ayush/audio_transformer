@@ -276,10 +276,94 @@ def apply_filter(
 # Time Warping – Slightly distort time axis to simulate variations.
 # Frequency Masking – Block random frequency bands (useful for speech).
 # Time Masking – Block random time sections to prevent overfitting.
-# Mixup & Cutmix – Blend two spectrograms to create hybrid data.
+
+
+def time_warp(spec: Union[np.ndarray, torch.Tensor], warp_factor=5):
+    num_freq, num_time = spec.shape
+    center = num_time // 2
+    warp_amount = np.random.randint(-warp_factor, warp_factor)
+    if isinstance(spec, np.ndarray):
+        spec = torch.tensor(spec)
+    warped_spec = torch.roll(spec, shifts=warp_amount, dims=1)
+    return warped_spec.numpy()
+
+
+def frequency_mask(spec: Union[np.ndarray, torch.Tensor], freq_mask_param=10):
+    num_freq, _ = spec.shape
+    f = np.random.randint(0, freq_mask_param)
+    f0 = np.random.randint(0, num_freq - f)
+    if isinstance(spec, torch.Tensor):
+        spec = spec.detach().numpy()
+    spec[f0 : f0 + f, :] = 0
+    return spec
+
+
+def time_mask(spec: Union[np.ndarray, torch.Tensor], time_mask_param=10):
+    _, num_time = spec.shape
+    t = np.random.randint(0, time_mask_param)
+    t0 = np.random.randint(0, num_time - t)
+    if isinstance(spec, torch.Tensor):
+        spec = spec.detach().numpy()
+    spec[:, t0 : t0 + t] = 0
+    return spec
+
+
+def spec_augmentation(
+    spec: Union[np.ndarray, torch.Tensor],
+    time_mask_param=10,
+    freq_mask_param=10,
+    warp_factor=5,
+):
+    if isinstance(spec, torch.Tensor):
+        spec = spec.detach().numpy()
+    spec = time_warp(spec=spec, warp_factor=warp_factor)
+    spec = frequency_mask(spec=spec, freq_mask_param=freq_mask_param)
+    spec = time_mask(spec=spec, time_mask_param=time_mask_param)
+    return spec
 
 
 # Environmental and Contextual Augmentations
 # Room Impulse Response (RIR) Augmentation – Simulate real-world room acoustics.
 # Background Noise Injection – Add street, office, or nature sounds for robustness.
 # Speed Perturbation – Create natural-sounding variations of speech/music.
+
+
+def apply_rir(audio: Union[torch.Tensor, np.ndarray], rir):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    reverberant_audio = signal.convolve(audio, rir, mode="full")[: len(audio)]
+    return reverberant_audio
+
+
+def generate_synthetic_rir(fs=16000, rt60=0.3, room_size=(5, 4, 3), num_reflections=5):
+    rir_length = int(fs * rt60)
+    rir = np.zeros(rir_length)
+    rir[0] = 1
+    for _ in range(num_reflections):
+        delay = np.random.randint(10, int(fs * 0.02))
+        amplitude = np.random.uniform(0.3, 0.7)
+        if delay < rir_length:
+            rir[delay] += amplitude
+
+    decay_factor = np.linspace(0, 5, rir_length)
+    rir += np.exp(-decay_factor) * np.random.uniform(0.5, 1.0)
+    rir /= np.max(np.abs(rir))
+    return rir
+
+
+def add_background_noise(audio: Union[np.ndarray, torch.Tensor], noise, snr_db=10):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    audio_power = np.mean(audio**2)
+    noise_power = np.mean(noise**2)
+
+    snr_linear = 10 ** (snr_db / 10)
+    noise = noise * np.sqrt(audio_power / (snr_linear * noise_power))
+    noisy_audio = audio + noise[: len(audio)]
+    return noisy_audio
+
+
+def change_speed(audio: Union[np.ndarray, torch.Tensor], sr, speed_factor=1.1):
+    if isinstance(audio, torch.Tensor):
+        audio = audio.detach().numpy()
+    return librosa.resample(audio, orig_sr=sr, target_sr=int(sr * speed_factor))
