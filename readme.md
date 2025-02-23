@@ -67,6 +67,5 @@ This project provides a comprehensive pipeline for audio processing, feature ext
 - `torchaudio`
 - `numpy`
 - `scipy`
-- `tensorflow` (for GPU acceleration in some cases)
 - `pydub` (for audio format conversion)
 - `sklearn` (for ML feature extraction)
