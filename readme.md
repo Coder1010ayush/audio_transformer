@@ -54,7 +54,7 @@ This project provides a comprehensive pipeline for audio processing, feature ext
 - **Wiener Filtering** (adaptive noise filtering)
 - **Adaptive Noise Reduction** (Deep Learning-based methods)  - Will be implemented in future
 
-### 6. Voice Activity Detection (VAD) & Speaker Separation
+### 6. Voice Activity Detection (VAD) & Speaker Separation  [ In Progress , Currently working on ]
 - **Detect & Remove Silence Segments** (Energy-based or Deep Learning-based)
 - **Speaker Diarization** (separate multiple speakers in one recording)
 
