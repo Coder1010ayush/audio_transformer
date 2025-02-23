@@ -68,4 +68,3 @@ This project provides a comprehensive pipeline for audio processing, feature ext
 - `numpy`
 - `scipy`
 - `pydub` (for audio format conversion)
-- `sklearn` (for ML feature extraction)
