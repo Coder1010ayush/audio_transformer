@@ -59,7 +59,7 @@ def is_speech_present(
 
 
 def spectral_subtraction(audio, sr, noise_frames=5, n_fft=1024, hop_length=512):
-    stft = compute_stft(audio, sr=sr, n_fft=n_fft, hop_length=hop_length)
+    stft, _ = compute_stft(audio, sr=sr, n_fft=n_fft, hop_length=hop_length)
     magnitude = torch.abs(stft)
     phase = torch.angle(stft)
 
@@ -73,7 +73,7 @@ def spectral_subtraction(audio, sr, noise_frames=5, n_fft=1024, hop_length=512):
 
 
 def wiener_filter(audio, sr, n_fft=1024, hop_length=512):
-    stft = compute_stft(audio, sr=sr, n_fft=n_fft, hop_length=hop_length)
+    stft, _ = compute_stft(audio, sr=sr, n_fft=n_fft, hop_length=hop_length)
     magnitude = torch.abs(stft)
     power = magnitude**2
     noise_power = torch.mean(power[:, :5], dim=1, keepdim=True)
