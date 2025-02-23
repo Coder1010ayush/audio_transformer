@@ -52,7 +52,7 @@ This project provides a comprehensive pipeline for audio processing, feature ext
 ### 5. Noise Reduction & Enhancement
 - **Spectral Subtraction** (removes stationary noise)
 - **Wiener Filtering** (adaptive noise filtering)
-- **Adaptive Noise Reduction** (Deep Learning-based methods)
+- **Adaptive Noise Reduction** (Deep Learning-based methods)  - Will be implemented in future
 
 ### 6. Voice Activity Detection (VAD) & Speaker Separation
 - **Detect & Remove Silence Segments** (Energy-based or Deep Learning-based)
